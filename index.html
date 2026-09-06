@@ -313,84 +313,101 @@
         const monthlyRate = interestRate / 12;
         const totalMonths = 30 * 12; 
         // Standard 30 year amortization fixed layout
-      // Calculate Fixed Monthly Principal & Interest Payment
-      let monthlyP_and_I = 0;
-      if (interestRate > 0) {
-        monthlyP_and_I = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
-      } else {
-        monthlyP_and_I = loanAmount / totalMonths;
-      }
-      // Initialize Trajectories
-      let currentHomeValue = homePrice;
-      let currentLoanBalance = loanAmount;
-      let currentRent = initialRent;
-      // Renter starts with the down payment saved up, invested in the market
-      let renterInvestment = downPayment;
-      let buyerInvestment = 0; 
-      // Assuming all liquid initial cash goes to down payment
-      const tbody = document.getElementById('projectionTable');
-      tbody.innerHTML = ''; 
-      // Reset table
-      // Track year-over-year values
-      for (let year = 1; year <= timeline; year++) {
-        let annualRentPaid = 0;
-        let annualBuyerHousingCosts = 0;
-      // Simulate month-by-month inside the year to handle accurate compounding and loan paydown
-        for (let month = 1; month <= 12; month++) {
-          // Renter housing expense
-          annualRentPaid += currentRent;
-          // Buyer housing expense (P&I + dynamic property tax/maintenance tied to home value)
-          let monthlyTaxAndMaint = (currentHomeValue * (propertyTaxRate + maintenanceRate)) / 12;
-          annualBuyerHousingCosts += (monthlyP_and_I + monthlyTaxAndMaint);
-          // Amortize Loan
-          if (currentLoanBalance > 0) {
-            let interestPayment = currentLoanBalance * monthlyRate;
-            let principalPayment = monthlyP_and_I - interestPayment;
-            currentLoanBalance = Math.max(0, currentLoanBalance - principalPayment);
-          }
-          // Transition rent at end of year rule handled outside month loop
-        }
-        // End of Year Asset Growth adjustments
-        currentHomeValue *= (1 + homeAppreciation);
-        // Opportunity Cost Savings Flow
-        // If renting costs less than buying overall, renter saves and invests the difference.
-        // If buying costs less, buyer invests the difference (renter portfolio grows strictly on returns).
-        if (annualBuyerHousingCosts > annualRentPaid) {
-          let savings = annualBuyerHousingCosts - annualRentPaid;
-          renterInvestment = (renterInvestment + savings) * (1 + investmentReturn);
-          buyerInvestment = buyerInvestment * (1 + investmentReturn);
+        // Calculate Fixed Monthly Principal & Interest Payment
+        let monthlyP_and_I = 0;
+        if (interestRate > 0) {
+            monthlyP_and_I = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
         } else {
-          let savings = annualRentPaid - annualBuyerHousingCosts;
-          renterInvestment = renterInvestment * (1 + investmentReturn);
-            buyerInvestment = (buyerInvestment + savings) * (1 + investmentReturn);
+            monthlyP_and_I = loanAmount / totalMonths;
         }
-        // Progress rent inflation
-        currentRent *= (1 + rentIncrease);
-        // Compute net worth definitions
-        // Buyer Net Worth = Equity (Home Value - Loan) minus 6% liquidation/agent fees + supplementary investmentslet 
-        buyerEquity = Math.max(0, currentHomeValue - currentLoanBalance);let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment;let renterNetWorth = renterInvestment;
-        // Update UI elements for dynamic timeline 
-        textdocument.querySelectorAll('.end-year').forEach(el => el.textContent = timeline);
-        // Append row to breakdown table
-        let row = document.createElement('tr');
-        row.innerHTML = `Year ${year}${formatCurrency(currentHomeValue)}${formatCurrency(currentLoanBalance)}${formatCurrency(buyerNetWorth)}${formatCurrency(currentRent)}/mo${formatCurrency(renterNetWorth)}`;
-        tbody.appendChild(row);
-        // If it's the final year of the timeline, push to top cards
-        if (year === timeline) {
-          document.getElementById('buyerNetWorth').textContent = formatCurrency(buyerNetWorth);
-          document.getElementById('renterNetWorth').textContent = formatCurrency(renterNetWorth);
-          let difference = Math.abs(buyerNetWorth - renterNetWorth);
-          if (buyerNetWorth > renterNetWorth) {
-            document.getElementById('verdictText').textContent = 🎉 Buying wins! Over a ${timeline}-year timeline, buying builds ${formatCurrency(difference)} more in net worth than renting.;
-          } else {
-            document.getElementById('verdictText').textContent = 📉 Renting wins! Over a ${timeline}-year timeline, investing your down payment builds ${formatCurrency(difference)} more in net worth than buying.;
-          }
+        
+        // Initialize Trajectories
+        let currentHomeValue = homePrice;
+        let currentLoanBalance = loanAmount;
+        let currentRent = initialRent;
+        
+        // Renter starts with the down payment saved up, invested in the market
+        let renterInvestment = downPayment;
+        let buyerInvestment = 0; 
+        
+        // Assuming all liquid initial cash goes to down payment
+        const tbody = document.getElementById('projectionTable');
+        tbody.innerHTML = '';      // Reset table
+        
+        // Track year-over-year values
+        for (let year = 1; year <= timeline; year++) {
+            let annualRentPaid = 0;
+            let annualBuyerHousingCosts = 0;
+            // start of year
+            let startOfYearHomeValue = currentHomeValue;
+            
+            // Simulate month-by-month inside the year to handle accurate compounding and loan paydown
+            for (let month = 1; month <= 12; month++) {
+                // Renter housing expense
+                annualRentPaid += currentRent;
+                // Buyer housing expense (P&I + dynamic property tax/maintenance tied to home value)
+                let monthlyTaxAndMaint = (currentHomeValue * (propertyTaxRate + maintenanceRate)) / 12;
+                annualBuyerHousingCosts += (monthlyP_and_I + monthlyTaxAndMaint);
+                
+                // Amortize Loan
+                if (currentLoanBalance > 0) {
+                    let interestPayment = currentLoanBalance * monthlyRate;
+                    let principalPayment = monthlyP_and_I - interestPayment;
+                    currentLoanBalance = Math.max(0, currentLoanBalance - principalPayment);
+                }                
+            }
+            
+            // End of Year Asset Growth adjustments
+            currentHomeValue *= (1 + homeAppreciation);
+            // Opportunity Cost Savings Flow
+            // If renting costs less than buying overall, renter saves and invests the difference.
+            // If buying costs less, buyer invests the difference (renter portfolio grows strictly on returns).
+            if (annualBuyerHousingCosts > annualRentPaid) {
+                let savings = annualBuyerHousingCosts - annualRentPaid;
+                renterInvestment = (renterInvestment + savings) * (1 + investmentReturn);
+                buyerInvestment = buyerInvestment * (1 + investmentReturn);
+            } else {
+                let savings = annualRentPaid - annualBuyerHousingCosts;
+                renterInvestment = renterInvestment * (1 + investmentReturn);
+                buyerInvestment = (buyerInvestment + savings) * (1 + investmentReturn);
+            }
+            // Progress rent inflation
+            currentRent *= (1 + rentIncrease);
+            // Compute net worth definitions
+            // Buyer Net Worth = Equity (Home Value - Loan) minus 6% liquidation/agent fees + supplementary investments 
+            let buyerEquity = Math.max(0, currentHomeValue - currentLoanBalance);
+            let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment;
+            let renterNetWorth = renterInvestment;
+            
+            // Update UI elements for dynamic timeline 
+            textdocument.querySelectorAll('.end-year').forEach(el => el.textContent = timeline);
+            // Append row to breakdown table
+            let row = document.createElement('tr');
+            row.innerHTML = `
+            <td>Year ${year}</td>
+            <td class="text-right">${formatCurrency(currentHomeValue)}</td>
+            <td class="text-right">${formatCurrency(currentLoanBalance)}</td>
+            <td class="text-right font-bold" style="color:var(--buyer-color)">${formatCurrency(buyerNetWorth)}</td>
+            <td class="text-right">${formatCurrency(currentRent / (1 + rentIncrease))}/mo</td>
+            <td class="text-right font-bold" style="color:var(--renter-color)">${formatCurrency(renterNetWorth)}</td>
+            `;
+            tbody.appendChild(row);
+            // If it's the final year of the timeline, push to top cards
+            if (year === timeline) {
+                document.getElementById('buyerNetWorth').textContent = formatCurrency(buyerNetWorth);
+                document.getElementById('renterNetWorth').textContent = formatCurrency(renterNetWorth);
+                let difference = Math.abs(buyerNetWorth - renterNetWorth);
+                if (buyerNetWorth > renterNetWorth) {
+                    document.getElementById('verdictText').textContent = 🎉 Buying wins! Over a ${timeline}-year timeline, buying builds ${formatCurrency(difference)} more in net worth than renting.;
+                } else {
+                    document.getElementById('verdictText').textContent = 📉 Renting wins! Over a ${timeline}-year timeline, investing your down payment builds ${formatCurrency(difference)} more in net worth than buying.;         
+                }
+            }
         }
-      }
     }
-  // Attach event listeners to all input boxes for real-time calculation updates
-  const inputs = document.querySelectorAll('.input-group input');
-  inputs.forEach(input => {input.addEventListener('input', calculateFinancials);
-                          });
-        // Initial load execution
-        window.addEventListener('DOMContentLoaded', calculateFinancials);
+    // Attach event listeners to all input boxes for real-time calculation updates
+    const inputs = document.querySelectorAll('.input-group input');
+    inputs.forEach(input => {input.addEventListener('input', calculateFinancials);
+                            });
+    // Initial load execution
+    window.addEventListener('DOMContentLoaded', calculateFinancials);
