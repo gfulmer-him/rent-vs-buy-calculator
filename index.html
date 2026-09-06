@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buy vs. Rent Financial Calculator</title>
+    <!-- Include Chart.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -191,6 +193,13 @@
 
         .text-right { text-align: right; }
         .font-bold { font-weight: bold; }
+
+        .chart-container {
+            position: relative;
+            margin-bottom: 2rem;
+            height: 350px;
+            width: 100%;
+}
     </style>
 </head>
 <body>
@@ -205,7 +214,7 @@
         <!-- Inputs Card -->
         <div class="card">
             <h2>Financial Inputs</h2>
-            
+        
             <div class="input-group">
                 <label for="homePrice">Home Purchase Price ($)</label>
                 <input type="number" id="homePrice" value="400000">
@@ -219,12 +228,20 @@
                 <input type="number" id="interestRate" value="6.5" step="0.01">
             </div>
             <div class="input-group">
+                <label for="totalYears">Mortgage Length (Years) </label>
+                <input type="number" id="totalYears" value="30" step="0.1">
+            </div>
+            <div class="input-group">
                 <label for="propertyTax">Annual Property Tax Rate (%)</label>
                 <input type="number" id="propertyTax" value="1.2" step="0.1">
             </div>
             <div class="input-group">
                 <label for="maintenance">Annual Maintenance / Ins (%)</label>
                 <input type="number" id="maintenance" value="1.5" step="0.1">
+            </div>
+            <div class="input-group">
+                <label for="hoaFee">Monthly HOA fee</label>
+                <input type="number" id="hoaFee" value="0" min="0">
             </div>
             <div class="input-group">
                 <label for="homeAppreciation">Annual Home Appreciation (%)</label>
@@ -265,6 +282,14 @@
                 Calculating the optimal path...
             </div>
 
+            <!-- Interactive Visual Chart Card -->
+            <div class="card">
+                <h2>Net Worth Growth Over Time</h2>
+                <div class="chart-container">
+                    <canvas id="netWorthChart"></canvas>
+                </div>
+            </div>
+
             <div class="card">
                 <h2>Year-by-Year Financial Breakdown</h2>
                 <div class="table-container">
@@ -290,124 +315,173 @@
 </div>
 
 <script>
-    // Helper to format currency
+    let myChart = null; // Stays outside the function to track active graph states
+
     function formatCurrency(val) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
     }
 
     function calculateFinancials() {
-        // Fetch values
-        const homePrice = parseFloat(document.getElementById('homePrice').value);
-        const downPaymentPct = parseFloat(document.getElementById('downPaymentPct').value) / 100;
-        const interestRate = parseFloat(document.getElementById('interestRate').value) / 100;
-        const propertyTaxRate = parseFloat(document.getElementById('propertyTax').value) / 100;
-        const maintenanceRate = parseFloat(document.getElementById('maintenance').value) / 100;
-        const homeAppreciation = parseFloat(document.getElementById('homeAppreciation').value) / 100;
-        const initialRent = parseFloat(document.getElementById('initialRent').value);
-        const rentIncrease = parseFloat(document.getElementById('rentIncrease').value) / 100;
-        const investmentReturn = parseFloat(document.getElementById('investmentReturn').value) / 100;
-        const timeline = parseInt(document.getElementById('timeline').value);
-        // Core Mortgage Variables
+        // establish constants from the user input
+        const homePrice = parseFloat(document.getElementById('homePrice').value) || 0;
+        const downPaymentPct = (parseFloat(document.getElementById('downPaymentPct').value) || 0) / 100;
+        const interestRate = (parseFloat(document.getElementById('interestRate').value) || 0) / 100;
+        const propertyTaxRate = (parseFloat(document.getElementById('propertyTax').value) || 0) / 100;
+        const maintenanceRate = (parseFloat(document.getElementById('maintenance').value) || 0) / 100;
+        const homeAppreciation = (parseFloat(document.getElementById('homeAppreciation').value) || 0) / 100;
+        const initialRent = parseFloat(document.getElementById('initialRent').value) || 0;
+        const rentIncrease = (parseFloat(document.getElementById('rentIncrease').value) || 0) / 100;
+        const investmentReturn = (parseFloat(document.getElementById('investmentReturn').value) || 0) / 100;
+        const timeline = parseInt(document.getElementById('timeline').value) || 30;
+        const monthlyHoaFee = parseFloat(document.getElementById('hoaFee').value) || 0;
+        const loanTotalYears = parseFloat(document.getElementById('totalYears').value) || 30;
+        // calculated constants
         const downPayment = homePrice * downPaymentPct;
         const loanAmount = homePrice - downPayment;
         const monthlyRate = interestRate / 12;
-        const totalMonths = 30 * 12; 
-        // Standard 30 year amortization fixed layout
-        // Calculate Fixed Monthly Principal & Interest Payment
+        const totalMonths = loanTotalYears * 12; 
+        // initialize the base values
+        // P&I
         let monthlyP_and_I = 0;
         if (interestRate > 0) {
             monthlyP_and_I = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
         } else {
             monthlyP_and_I = loanAmount / totalMonths;
         }
-        
-        // Initialize Trajectories
+        // home value and savings balances
         let currentHomeValue = homePrice;
         let currentLoanBalance = loanAmount;
         let currentRent = initialRent;
-        
-        // Renter starts with the down payment saved up, invested in the market
-        let renterInvestment = downPayment;
+        let renterInvestment = downPayment; 
         let buyerInvestment = 0; 
-        
-        // Assuming all liquid initial cash goes to down payment
+
         const tbody = document.getElementById('projectionTable');
-        tbody.innerHTML = '';      // Reset table
-        
-        // Track year-over-year values
+        if(!tbody) return;
+        tbody.innerHTML = ''; 
+        // Arrays to hold graph data points
+        let chartLabels = [];
+        let buyerDataPoints = [];
+        let renterDataPoints = [];
+        // for loop to go year-by-year
         for (let year = 1; year <= timeline; year++) {
             let annualRentPaid = 0;
             let annualBuyerHousingCosts = 0;
-            // start of year
             let startOfYearHomeValue = currentHomeValue;
-            
-            // Simulate month-by-month inside the year to handle accurate compounding and loan paydown
+
+            // for each year, for loop to go month-by-month to generate values
             for (let month = 1; month <= 12; month++) {
-                // Renter housing expense
                 annualRentPaid += currentRent;
-                // Buyer housing expense (P&I + dynamic property tax/maintenance tied to home value)
-                let monthlyTaxAndMaint = (currentHomeValue * (propertyTaxRate + maintenanceRate)) / 12;
-                annualBuyerHousingCosts += (monthlyP_and_I + monthlyTaxAndMaint);
-                
-                // Amortize Loan
+                let monthlyTaxAndMaint = (startOfYearHomeValue * (propertyTaxRate + maintenanceRate)) / 12;
+                annualBuyerHousingCosts += (monthlyP_and_I + monthlyTaxAndMaint + monthlyHoaFee);
+
                 if (currentLoanBalance > 0) {
                     let interestPayment = currentLoanBalance * monthlyRate;
                     let principalPayment = monthlyP_and_I - interestPayment;
                     currentLoanBalance = Math.max(0, currentLoanBalance - principalPayment);
-                }                
+                }
             }
-            
-            // End of Year Asset Growth adjustments
+            // set the home value for the beginning of the next year
             currentHomeValue *= (1 + homeAppreciation);
-            // Opportunity Cost Savings Flow
-            // If renting costs less than buying overall, renter saves and invests the difference.
-            // If buying costs less, buyer invests the difference (renter portfolio grows strictly on returns).
-            if (annualBuyerHousingCosts > annualRentPaid) {
+            
+            if (annualBuyerHousingCosts > annualRentPaid) { // savings if renting is cheaper
                 let savings = annualBuyerHousingCosts - annualRentPaid;
                 renterInvestment = (renterInvestment + savings) * (1 + investmentReturn);
                 buyerInvestment = buyerInvestment * (1 + investmentReturn);
             } else {
-                let savings = annualRentPaid - annualBuyerHousingCosts;
+                let savings = annualRentPaid - annualBuyerHousingCosts; // savings if buying is cheaper
                 renterInvestment = renterInvestment * (1 + investmentReturn);
                 buyerInvestment = (buyerInvestment + savings) * (1 + investmentReturn);
             }
-            // Progress rent inflation
+            //set the rental rate for the next year
             currentRent *= (1 + rentIncrease);
-            // Compute net worth definitions
-            // Buyer Net Worth = Equity (Home Value - Loan) minus 6% liquidation/agent fees + supplementary investments 
+
             let buyerEquity = Math.max(0, currentHomeValue - currentLoanBalance);
-            let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment;
+            let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment; 
             let renterNetWorth = renterInvestment;
-            
-            // Update UI elements for dynamic timeline 
-            textdocument.querySelectorAll('.end-year').forEach(el => el.textContent = timeline);
-            // Append row to breakdown table
+
+            // Push values into arrays for graph mapping
+            chartLabels.push(`Year ${year}`);
+            buyerDataPoints.push(Math.round(buyerNetWorth));
+            renterDataPoints.push(Math.round(renterNetWorth));    
+
+            document.querySelectorAll('.end-year').forEach(el => el.textContent = timeline);
+
             let row = document.createElement('tr');
             row.innerHTML = `
-            <td>Year ${year}</td>
-            <td class="text-right">${formatCurrency(currentHomeValue)}</td>
-            <td class="text-right">${formatCurrency(currentLoanBalance)}</td>
-            <td class="text-right font-bold" style="color:var(--buyer-color)">${formatCurrency(buyerNetWorth)}</td>
-            <td class="text-right">${formatCurrency(currentRent / (1 + rentIncrease))}/mo</td>
-            <td class="text-right font-bold" style="color:var(--renter-color)">${formatCurrency(renterNetWorth)}</td>
+                <td>Year ${year}</td>
+                <td class="text-right">${formatCurrency(currentHomeValue)}</td>
+                <td class="text-right">${formatCurrency(currentLoanBalance)}</td>
+                <td class="text-right font-bold" style="color:var(--buyer-color)">${formatCurrency(buyerNetWorth)}</td>
+                <td class="text-right">${formatCurrency(currentRent / (1 + rentIncrease))}/mo</td>
+                <td class="text-right font-bold" style="color:var(--renter-color)">${formatCurrency(renterNetWorth)}</td>
             `;
             tbody.appendChild(row);
-            // If it's the final year of the timeline, push to top cards
+
             if (year === timeline) {
                 document.getElementById('buyerNetWorth').textContent = formatCurrency(buyerNetWorth);
                 document.getElementById('renterNetWorth').textContent = formatCurrency(renterNetWorth);
+
                 let difference = Math.abs(buyerNetWorth - renterNetWorth);
                 if (buyerNetWorth > renterNetWorth) {
-                    document.getElementById('verdictText').textContent = 🎉 Buying wins! Over a ${timeline}-year timeline, buying builds ${formatCurrency(difference)} more in net worth than renting.;
+                    document.getElementById('verdictText').textContent = `🎉 Buying wins! Over a ${timeline}-year timeline, buying builds ${formatCurrency(difference)} more in net worth than renting.`;
                 } else {
-                    document.getElementById('verdictText').textContent = 📉 Renting wins! Over a ${timeline}-year timeline, investing your down payment builds ${formatCurrency(difference)} more in net worth than buying.;         
+                    document.getElementById('verdictText').textContent = `📉 Renting wins! Over a ${timeline}-year timeline, investing your down payment builds ${formatCurrency(difference)} more in net worth than buying.`;
                 }
             }
         }
+        console.log("Chart labels data bank:", chartLabels);
+        console.log("Buyer data points bank:", buyerDataPoints);
+        updateChart(chartLabels, buyerDataPoints, renterDataPoints);
     }
-    // Attach event listeners to all input boxes for real-time calculation updates
+
+    function updateChart(labels, buyerData, renterData) {
+        const ctx = document.getElementById('netWorthChart').getContext('2d');
+        
+        // Wipe clean old charts to prevent stacking flicker glitches
+        if (myChart) { myChart.destroy(); }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Buyer Net Worth',
+                        data: buyerData,
+                        borderColor: '#16a34a',
+                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Renter Net Worth',
+                        data: renterData,
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { ticks: { callback: function(value) { return '$' + value.toLocaleString(); } } }
+                },
+                plugins: {
+                    tooltip: { callbacks: { label: function(context) { return context.dataset.label + ': $' + context.raw.toLocaleString(); } } }
+                }
+            }
+        });
+    }
+
     const inputs = document.querySelectorAll('.input-group input');
-    inputs.forEach(input => {input.addEventListener('input', calculateFinancials);
-                            });
-    // Initial load execution
+    inputs.forEach(input => {
+        input.addEventListener('input', calculateFinancials);
+    });
+
     window.addEventListener('DOMContentLoaded', calculateFinancials);
+</script>
+</body>
+</html>
