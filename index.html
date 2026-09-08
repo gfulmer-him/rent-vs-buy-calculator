@@ -217,7 +217,7 @@
         
             <div class="input-group">
                 <label for="homePrice">Home Purchase Price ($)</label>
-                <input type="number" id="homePrice" value="400000">
+                <input type="number" id="homePrice" value="350000">
             </div>
             <div class="input-group">
                 <label for="downPaymentPct">Down Payment (%)</label>
@@ -241,7 +241,7 @@
             </div>
             <div class="input-group">
                 <label for="hoaFee">Monthly HOA fee</label>
-                <input type="number" id="hoaFee" value="0" min="0">
+                <input type="number" id="hoaFee" value="250" min="0">
             </div>
             <div class="input-group">
                 <label for="homeAppreciation">Annual Home Appreciation (%)</label>
@@ -253,7 +253,7 @@
             </div>
             <div class="input-group">
                 <label for="rentIncrease">Annual Rent Increase (%)</label>
-                <input type="number" id="rentIncrease" value="3.5" step="0.1">
+                <input type="number" id="rentIncrease" value="3.0" step="0.1">
             </div>
             <div class="input-group">
                 <label for="investmentReturn">Expected Investment Return (%)</label>
@@ -261,7 +261,7 @@
             </div>
             <div class="input-group">
                 <label for="timeline">Comparison Timeline (Years)</label>
-                <input type="number" id="timeline" value="30" min="1" max="40">
+                <input type="number" id="timeline" value="10" min="1" max="40">
             </div>
         </div>
 
@@ -336,8 +336,9 @@
         const monthlyHoaFee = parseFloat(document.getElementById('hoaFee').value) || 0;
         const loanTotalYears = parseFloat(document.getElementById('totalYears').value) || 30;
         // calculated constants
-        const downPayment = homePrice * downPaymentPct;
-        const loanAmount = homePrice - downPayment;
+        const downPayment = homePrice * downPaymentPct; // compute down payment
+        const loanAmount = homePrice - downPayment; // final loan amount
+        const closingCosts = loanAmount * 0.03; // closing costs at ~ 3 percent
         const monthlyRate = interestRate / 12;
         const totalMonths = loanTotalYears * 12; 
         // initialize the base values
@@ -352,7 +353,7 @@
         let currentHomeValue = homePrice;
         let currentLoanBalance = loanAmount;
         let currentRent = initialRent;
-        let renterInvestment = downPayment; 
+        let renterInvestment = downPayment + closingCosts; 
         let buyerInvestment = 0; 
 
         const tbody = document.getElementById('projectionTable');
