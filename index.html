@@ -308,6 +308,15 @@
                             <!-- Rows injected via JavaScript -->
                         </tbody>
                     </table>
+                    <!-- Notes about the table-->
+                    <div style="margin-top: 15px;">
+                        <em style="font-size: 0.9rem; color: #555;">Notes:</em>
+                        <ul style="margin-top: 5px; font-size: 0.85rem; color: #666; line-height: 1.5; padding-left: 20px;">
+                            <li>The renter net worth column is based on the initial down payment and an assumed 3% closing cost based on the loan principal.</li>
+                            <li>Property taxes and annual maintenance are computed annually per the rates provided.</li>
+                            <li>Transaction costs of 6% are factored into the Buyer annual net worth column.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -397,7 +406,7 @@
             currentRent *= (1 + rentIncrease);
 
             let buyerEquity = Math.max(0, currentHomeValue - currentLoanBalance);
-            let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment; 
+            let buyerNetWorth = (buyerEquity * 0.94) + buyerInvestment; // the 0.94 is based on losing 6% in sales costs
             let renterNetWorth = renterInvestment;
 
             // Push values into arrays for graph mapping
